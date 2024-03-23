@@ -17,7 +17,7 @@ const upload = multer({
 });
 
 const app = express();
-const PORT = process.env.PORT || 7000;
+const PORT = process.env.PORT || 2000;
 
 app.post("/upload", upload.array("files"), (req: Request, res: Response) => {
   if (!req.files || req.files.length === 0) {
