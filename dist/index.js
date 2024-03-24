@@ -5,21 +5,24 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import s3Client from "./s3Client.js";
 import dotenv from "dotenv";
+import { pool } from "./dbSetup.js";
+import { createTableAndTrigger } from "./setupImageUploadTable.js";
 dotenv.config();
 const app = express();
 const upload = multer(); // Using multer's default memory storage
 app.use(cors()); // This will enable all CORS requests. For production, configure this properly.
+createTableAndTrigger();
 app.post("/upload", upload.array("images"), async (req, res) => {
     if (!req.files || (Array.isArray(req.files) && req.files.length === 0)) {
-        // If no files are uploaded, send a 400 Bad Request response
         return res.status(400).send("No files were uploaded.");
     }
     const files = req.files;
     const uploadPromises = files.map((file) => uploadToS3(file));
     try {
         const results = await Promise.all(uploadPromises);
-        console.log(results);
-        res.json({ message: "Files uploaded successfully", urls: results });
+        const insertPromises = results.map((url) => pool.query("INSERT INTO image_uploads (image_url) VALUES ($1) RETURNING *", [url]));
+        const insertedRecords = await Promise.all(insertPromises);
+        res.status(200).send(insertedRecords.map((record) => record.rows[0]));
     }
     catch (error) {
         console.error("Upload error:", error);
