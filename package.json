@@ -20,7 +20,9 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.1",
     "multer": "^1.4.5-lts.1",
-    "pg": "^8.11.3"
+    "openai": "^4.29.2",
+    "pg": "^8.11.3",
+    "uuidv4": "^6.2.13"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
