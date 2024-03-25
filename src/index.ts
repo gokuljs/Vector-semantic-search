@@ -111,7 +111,7 @@ app.post(
               id: item.id,
               embeddings: data.data[0].embedding,
             };
-
+            console.log(document.description);
             return collection.insertOne(document);
           });
           const insertedRecords = await Promise.all(allPromises);
@@ -123,7 +123,7 @@ app.post(
       }
     } catch (error) {
       console.error("Upload error:", error);
-      res.status(500).send("Error uploading files.");
+      res.status(500).send({ message: (error as Error).message });
     }
   }
 );
@@ -148,7 +148,7 @@ app.get("/search", async (req, res) => {
           path: "embeddings",
           queryVector: query,
           numCandidates: 100,
-          limit: 50,
+          limit: 100,
         },
       },
       {
