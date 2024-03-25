@@ -7,7 +7,7 @@ import OpenAI from "openai";
 import { uuid } from "uuidv4";
 import { uploadToS3 } from "./uploads3.js";
 import { PORT, PROMPT } from "./constant.js";
-import { client } from "./MongoDBsetup.js";
+import { client } from "./MongoDbsetup.js";
 const corsOptions = {
     origin: "http://localhost:3000",
 };
