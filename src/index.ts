@@ -3,12 +3,12 @@ dotenv.config();
 import express, { Request, Response } from "express";
 import multer from "multer";
 import cors from "cors";
-
-import { pool } from "./dbSetup.js";
 import { createTableAndTrigger } from "./setupImageUploadTable.js";
 import OpenAI from "openai";
 import { uuid } from "uuidv4";
 import { uploadToS3 } from "./uploads3.js";
+import { MongoClient, ServerApiVersion } from "mongodb";
+import { PORT, PROMPT } from "./constant.js";
 
 const app = express();
 const upload = multer(); // Using multer's default memory storage
@@ -20,17 +20,13 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const PROMPT = `
-Analyzing image data to identify subjects, themes, contexts, and description (complete inDetail description of the message) of the message categorizing them accordingly and give it to me in a stringified object so that i can easily parse the output.
-For Example: this format just returns an object without any text
-{
-  "subjects": ["dog"],
-  "attributes": ["black", "running"],
-  "themes": ["adventure"],
-  "contexts": ["outdoors", "park"],
-  "description" :"In detail description of the message"
-}
-`;
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(process.env.MONGODB_URL ?? "", {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    deprecationErrors: true,
+  },
+});
 
 app.post(
   "/upload",
@@ -39,19 +35,10 @@ app.post(
     if (!req.files || (Array.isArray(req.files) && req.files.length === 0)) {
       return res.status(400).send("No files were uploaded.");
     }
-
     const files = req.files as Express.Multer.File[];
     const uploadPromises = files.map((file) => uploadToS3(file));
     try {
       const results = await Promise.all(uploadPromises);
-      const insertPromises = results.map((url) =>
-        pool.query(
-          "INSERT INTO image_uploads (image_url) VALUES ($1) RETURNING *",
-          [url]
-        )
-      );
-      const insertedRecords = await Promise.all(insertPromises);
-      res.status(200).send(insertedRecords.map((record) => record.rows[0]));
       const allPromise = results.map(async (url) => {
         const response = await openai.chat.completions.create({
           model: "gpt-4-vision-preview",
@@ -90,43 +77,68 @@ app.post(
         .catch((error) => {
           console.error("Error:", error);
         });
-      data &&
-        data.forEach((data) => {
-          const jsonData = data.jsonData;
-          const url = data.url;
-          const description = jsonData.description;
-          const subjects = jsonData.subjects;
-          const attributes = jsonData.attributes;
-          const themes = jsonData.themes;
-          const contexts = jsonData.contexts;
-          const id = data.id;
-          const subjectsLiteral = constructArrayLiteral(subjects);
-          const attributesLiteral = constructArrayLiteral(attributes);
-          const themesLiteral = constructArrayLiteral(themes);
-          const contextsLiteral = constructArrayLiteral(contexts);
-          // SQL statement to insert data into the table
-          const insertQuery = `INSERT INTO image_metadata (id, subjects, attributes, themes, contexts, description, url) 
-      VALUES ($1, $2, $3, $4, $5, $6,$7)`;
-          pool.query(
-            insertQuery,
-            [
-              id,
-              subjectsLiteral,
-              attributesLiteral,
-              themesLiteral,
-              contextsLiteral,
-              description,
-              url,
-            ],
-            (err, res) => {
-              if (err) {
-                console.error("Error executing query", err);
-              } else {
-                console.log("Data inserted successfully");
-              }
-            }
-          );
-        });
+
+      if (data) {
+        try {
+          await client.connect();
+          console.log("Connected successfully to MongoDB");
+          const database = client.db("Cluster0"); // Replace with your database name
+          const collection = database.collection("image_metadata");
+          const allPromises = data.map(async (item) => {
+            const data = await openai.embeddings.create({
+              model: "text-embedding-3-small",
+              input: item.jsonData.description,
+              encoding_format: "float",
+            });
+            const document = {
+              subjects: item.jsonData.subjects, // Populate array as needed
+              attributes: item.jsonData.attributes,
+              themes: item.jsonData.themes,
+              contexts: item.jsonData.contexts,
+              description: item.jsonData.description,
+              image_url: item.url,
+              id: item.id,
+              embeddings: data.data[0].embedding,
+            };
+            return collection.insertOne(document);
+          });
+          const insertedRecords = await Promise.all(allPromises);
+          res.status(200).send("data inserted");
+          const queryString = "A picture of the dog";
+          const queryVector = await openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: queryString,
+            encoding_format: "float",
+          });
+          const query = queryVector.data[0].embedding;
+          const agg = [
+            {
+              $vectorSearch: {
+                index: "PlotSemanticSearch",
+                path: "embeddings",
+                queryVector: query,
+                numCandidates: 150,
+                limit: 1,
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                image_url: 1,
+                description: 1,
+                score: {
+                  $meta: "vectorSearchScore",
+                },
+              },
+            },
+          ];
+
+          const result = await collection.aggregate(agg).toArray();
+          console.log(result);
+        } catch (error) {
+          console.log("Error", error);
+        }
+      }
     } catch (error) {
       console.error("Upload error:", error);
       res.status(500).send("Error uploading files.");
@@ -139,5 +151,4 @@ function constructArrayLiteral(array: string[]) {
   return `{${array.map((item) => `"${item}"`).join(",")}}`;
 }
 
-const port = process.env.PORT || 2000;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
