@@ -9,9 +9,13 @@ import { uploadToS3 } from "./uploads3.js";
 import { MongoClient, ServerApiVersion } from "mongodb";
 import { PORT, PROMPT } from "./constant.js";
 
+const corsOptions = {
+  origin: "http://localhost:3000",
+};
+
 const app = express();
 const upload = multer(); // Using multer's default memory storage
-app.use(cors()); // This will enable all CORS requests. For production, configure this properly.
+app.use(cors(corsOptions)); // This will enable all CORS requests. For production, configure this properly.
 
 const openai = new OpenAI({
   organization: process.env.OPENAI_ORGANISATION,
