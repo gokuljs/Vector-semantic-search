@@ -1,20 +1,14 @@
-import express, { Request, Response, NextFunction } from "express";
-import multer, { MulterError } from "multer";
-import cors from "cors";
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-} from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import s3Client from "./s3Client.js";
 import dotenv from "dotenv";
+dotenv.config();
+import express, { Request, Response } from "express";
+import multer from "multer";
+import cors from "cors";
+
 import { pool } from "./dbSetup.js";
 import { createTableAndTrigger } from "./setupImageUploadTable.js";
 import OpenAI from "openai";
 import { uuid } from "uuidv4";
-
-dotenv.config();
+import { uploadToS3 } from "./uploads3.js";
 
 const app = express();
 const upload = multer(); // Using multer's default memory storage
@@ -58,7 +52,6 @@ app.post(
       );
       const insertedRecords = await Promise.all(insertPromises);
       res.status(200).send(insertedRecords.map((record) => record.rows[0]));
-      console.log(results);
       const allPromise = results.map(async (url) => {
         const response = await openai.chat.completions.create({
           model: "gpt-4-vision-preview",
@@ -145,22 +138,6 @@ app.post(
     }
   }
 );
-
-const uploadToS3 = async (file: Express.Multer.File): Promise<string> => {
-  const key = `${Date.now()}_${file.originalname}`;
-  const bucketName = process.env.AWS_S3_BUCKET_NAME; // Ensure your bucket name is in the environment variables
-  const region = process.env.AWS_REGION; // Ensure your AWS region is in the environment variables
-  const command = new PutObjectCommand({
-    Bucket: process.env.AWS_S3_BUCKET_NAME,
-    Key: key,
-    Body: file.buffer,
-  });
-  await s3Client.send(command);
-  const url = `https://${bucketName}.s3.${region}.amazonaws.com/${encodeURIComponent(
-    key
-  )}`;
-  return url;
-};
 
 const port = process.env.PORT || 2000;
 app.listen(port, () => console.log(`Server running on port ${port}`));
