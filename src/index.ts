@@ -135,7 +135,6 @@ app.get("/search", async (req, res) => {
     const database = client.db("Cluster0"); // Replace with your database name
     const collection = database.collection("image_metadata");
     const queryString = req.query.query as string;
-    console.log(queryString, "ssss");
     const queryVector = await openai.embeddings.create({
       model: "text-embedding-3-small",
       input: queryString,
@@ -167,7 +166,9 @@ app.get("/search", async (req, res) => {
     const result = await collection.aggregate(agg).toArray();
     const scoreThreshold = 65;
     res.status(200).send({
-      data: result.filter((item) => item.score * 100 > scoreThreshold),
+      data: result
+        .filter((item) => item.score * 100 > scoreThreshold)
+        .sort((a, b) => b.score - a.score),
     });
   } catch (error) {
     console.log(error);
