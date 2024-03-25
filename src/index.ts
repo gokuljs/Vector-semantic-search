@@ -99,11 +99,6 @@ app.post(
           const attributes = jsonData.attributes;
           const themes = jsonData.themes;
           const contexts = jsonData.contexts;
-
-          // Function to construct array literal
-          function constructArrayLiteral(array: string[]) {
-            return `{${array.map((item) => `"${item}"`).join(",")}}`;
-          }
           const id = data.id;
           const subjectsLiteral = constructArrayLiteral(subjects);
           const attributesLiteral = constructArrayLiteral(attributes);
@@ -138,6 +133,11 @@ app.post(
     }
   }
 );
+
+// Function to construct array literal
+function constructArrayLiteral(array: string[]) {
+  return `{${array.map((item) => `"${item}"`).join(",")}}`;
+}
 
 const port = process.env.PORT || 2000;
 app.listen(port, () => console.log(`Server running on port ${port}`));

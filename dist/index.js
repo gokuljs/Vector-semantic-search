@@ -83,10 +83,6 @@ app.post("/upload", upload.array("images"), async (req, res) => {
                 const attributes = jsonData.attributes;
                 const themes = jsonData.themes;
                 const contexts = jsonData.contexts;
-                // Function to construct array literal
-                function constructArrayLiteral(array) {
-                    return `{${array.map((item) => `"${item}"`).join(",")}}`;
-                }
                 const id = data.id;
                 const subjectsLiteral = constructArrayLiteral(subjects);
                 const attributesLiteral = constructArrayLiteral(attributes);
@@ -118,5 +114,9 @@ app.post("/upload", upload.array("images"), async (req, res) => {
         res.status(500).send("Error uploading files.");
     }
 });
+// Function to construct array literal
+function constructArrayLiteral(array) {
+    return `{${array.map((item) => `"${item}"`).join(",")}}`;
+}
 const port = process.env.PORT || 2000;
 app.listen(port, () => console.log(`Server running on port ${port}`));
