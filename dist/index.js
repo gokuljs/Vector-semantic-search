@@ -83,10 +83,9 @@ app.post("/upload", upload.array("images"), async (req, res) => {
                         themes: item.jsonData.themes,
                         contexts: item.jsonData.contexts,
                     };
-                    const queryString = Object.values(context).flat().join("");
                     const data = await openai.embeddings.create({
                         model: "text-embedding-3-small",
-                        input: queryString,
+                        input: item.jsonData.description,
                         encoding_format: "float",
                     });
                     const document = {
