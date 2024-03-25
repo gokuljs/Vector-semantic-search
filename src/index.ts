@@ -8,6 +8,7 @@ import { uuid } from "uuidv4";
 import { uploadToS3 } from "./uploads3.js";
 import { MongoClient, ServerApiVersion } from "mongodb";
 import { PORT, PROMPT } from "./constant.js";
+import { client } from "./MongoDBsetup.js";
 
 const corsOptions = {
   origin: "http://localhost:3000",
@@ -23,12 +24,6 @@ const openai = new OpenAI({
 });
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(process.env.MONGODB_URL ?? "", {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    deprecationErrors: true,
-  },
-});
 
 app.post(
   "/upload",
@@ -93,12 +88,6 @@ app.post(
           const database = client.db("Cluster0"); // Replace with your database name
           const collection = database.collection("image_metadata");
           const allPromises = data.map(async (item) => {
-            const context = {
-              subjects: item.jsonData.subjects,
-              attributes: item.jsonData.attributes,
-              themes: item.jsonData.themes,
-              contexts: item.jsonData.contexts,
-            };
             const data = await openai.embeddings.create({
               model: "text-embedding-3-small",
               input: item.jsonData.description,
