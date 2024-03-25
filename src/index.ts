@@ -4,7 +4,7 @@ import express, { Request, Response } from "express";
 import multer from "multer";
 import cors from "cors";
 import OpenAI from "openai";
-import { uuid } from "uuidv4";
+import { v4 as uuidv4 } from "uuid";
 import { uploadToS3 } from "./uploads3.js";
 import { MongoClient, ServerApiVersion } from "mongodb";
 import { PORT, PROMPT } from "./constant.js";
@@ -70,7 +70,7 @@ app.post(
         const trimmedString = jsonString.replace(/`|\n/g, "");
 
         const jsonData = JSON.parse(trimmedString);
-        return { jsonData, url, id: uuid() };
+        return { jsonData, url, id: uuidv4() };
       });
       const data = await Promise.all(allPromise)
         .then((results) => {
