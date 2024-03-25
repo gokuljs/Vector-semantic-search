@@ -3,7 +3,6 @@ dotenv.config();
 import express from "express";
 import multer from "multer";
 import cors from "cors";
-import { createTableAndTrigger } from "./setupImageUploadTable.js";
 import OpenAI from "openai";
 import { uuid } from "uuidv4";
 import { uploadToS3 } from "./uploads3.js";
@@ -12,7 +11,6 @@ import { PORT, PROMPT } from "./constant.js";
 const app = express();
 const upload = multer(); // Using multer's default memory storage
 app.use(cors()); // This will enable all CORS requests. For production, configure this properly.
-createTableAndTrigger();
 const openai = new OpenAI({
     organization: process.env.OPENAI_ORGANISATION,
     apiKey: process.env.OPENAI_API_KEY,
@@ -37,6 +35,10 @@ app.post("/upload", upload.array("images"), async (req, res) => {
                 model: "gpt-4-vision-preview",
                 temperature: 0,
                 messages: [
+                    {
+                        role: "system",
+                        content: "the system only speaks in JSON. Do not generate output that isn’t in properly formatted JSON.",
+                    },
                     {
                         role: "user",
                         content: [
@@ -75,6 +77,12 @@ app.post("/upload", upload.array("images"), async (req, res) => {
                 const database = client.db("Cluster0"); // Replace with your database name
                 const collection = database.collection("image_metadata");
                 const allPromises = data.map(async (item) => {
+                    const context = {
+                        subjects: item.jsonData.subjects,
+                        attributes: item.jsonData.attributes,
+                        themes: item.jsonData.themes,
+                        contexts: item.jsonData.contexts,
+                    };
                     const data = await openai.embeddings.create({
                         model: "text-embedding-3-small",
                         input: item.jsonData.description,
@@ -90,40 +98,12 @@ app.post("/upload", upload.array("images"), async (req, res) => {
                         id: item.id,
                         embeddings: data.data[0].embedding,
                     };
+                    console.log(document.description);
                     return collection.insertOne(document);
                 });
                 const insertedRecords = await Promise.all(allPromises);
+                console.log("records inserted");
                 res.status(200).send("data inserted");
-                const queryString = "A picture of the dog";
-                const queryVector = await openai.embeddings.create({
-                    model: "text-embedding-3-small",
-                    input: queryString,
-                    encoding_format: "float",
-                });
-                const query = queryVector.data[0].embedding;
-                const agg = [
-                    {
-                        $vectorSearch: {
-                            index: "PlotSemanticSearch",
-                            path: "embeddings",
-                            queryVector: query,
-                            numCandidates: 150,
-                            limit: 1,
-                        },
-                    },
-                    {
-                        $project: {
-                            _id: 0,
-                            image_url: 1,
-                            description: 1,
-                            score: {
-                                $meta: "vectorSearchScore",
-                            },
-                        },
-                    },
-                ];
-                const result = await collection.aggregate(agg).toArray();
-                console.log(result);
             }
             catch (error) {
                 console.log("Error", error);
@@ -132,8 +112,55 @@ app.post("/upload", upload.array("images"), async (req, res) => {
     }
     catch (error) {
         console.error("Upload error:", error);
-        res.status(500).send("Error uploading files.");
+        res.status(500).send({ message: error.message });
     }
+});
+app.get("/search", async (req, res) => {
+    try {
+        await client.connect();
+        console.log("Connected successfully to MongoDB");
+        const database = client.db("Cluster0"); // Replace with your database name
+        const collection = database.collection("image_metadata");
+        const queryString = req.query.query;
+        const queryVector = await openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: queryString,
+            encoding_format: "float",
+        });
+        const query = queryVector.data[0].embedding;
+        const agg = [
+            {
+                $vectorSearch: {
+                    index: "PlotSemanticSearch",
+                    path: "embeddings",
+                    queryVector: query,
+                    numCandidates: 100,
+                    limit: 100,
+                },
+            },
+            {
+                $project: {
+                    _id: 0,
+                    image_url: 1,
+                    description: 1,
+                    score: {
+                        $meta: "vectorSearchScore",
+                    },
+                },
+            },
+        ];
+        const result = await collection.aggregate(agg).toArray();
+        const scoreThreshold = 65;
+        res.status(200).send({
+            data: result
+                .filter((item) => item.score * 100 > scoreThreshold)
+                .sort((a, b) => b.score - a.score),
+        });
+    }
+    catch (error) {
+        console.log(error);
+    }
+    // Perform some operation with searchString. Here, we just echo it back.
 });
 // Function to construct array literal
 function constructArrayLiteral(array) {
