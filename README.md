@@ -1,7 +1,8 @@
 # chima-backend
 
 # core-logic
-<img width="1513" alt="image" src="https://github.com/gokuljs/chima-backend/assets/51263906/9acc6dbb-b34d-4cf2-b442-ea2c1dd251fc">
+<img width="973" alt="image" src="https://github.com/gokuljs/Vector-semantic-search-backend-/assets/51263906/386e17a5-e29e-406b-b6f0-e1465ceec9f7">
+
 
 # backend setup 
 
